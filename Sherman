@@ -32,8 +32,10 @@ my %counting =(
 	       non_directional => 0,
 	       uniform_converted => 0,
 	       uniform_total => 0,
-	       CH_converted => 0,
-	       CH_total => 0,
+	       CHG_converted => 0,
+	       CHG_total => 0,
+				 CHH_converted => 0,
+	       CHH_total => 0,
 	       CG_converted => 0,
 	       CG_total => 0,
 	       small => 0,
@@ -43,7 +45,7 @@ my %counting =(
 my @DNA_bases = ('A','T','C','G');
 my @gaussian; # will hold random fragment lengths
 
-my ($sequence_length,$conversion_rate,$number_of_sequences,$error_rate,$number_of_SNPs,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir) = process_command_line();
+my ($sequence_length,$conversion_rate,$number_of_sequences,$error_rate,$number_of_SNPs,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CHG_conversion_rate,$CHH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir) = process_command_line();
 
 print_onscreen_summary();
 run_sequence_generation();
@@ -84,9 +86,10 @@ sub print_onscreen_summary{
       warn "bisulfite conversion rate:\t$conversion_rate%\n";
     }
   }
-  if (defined $CG_conversion_rate and defined $CH_conversion_rate){
+  if (defined $CG_conversion_rate and defined $CHG_conversion_rate and defined $CHH_conversion_rate){
     warn "bisulfite conversion rate in CG-context:\t$CG_conversion_rate%\n";
-    warn "bisulfite conversion rate in CH-context:\t$CH_conversion_rate%\n";
+    warn "bisulfite conversion rate in CHG-context:\t$CHG_conversion_rate%\n";
+		warn "bisulfite conversion rate in CHH-context:\t$CHH_conversion_rate%\n";
   }
 
   if ($number_of_SNPs > 0){
@@ -127,7 +130,7 @@ sub run_sequence_generation{
   ### GENERATE QUALITY STRING (this quality will be used for all sequences)
   # quality values are of the specified sequence length (and not 1 bp longer)
   my $phred33_quality =  generate_quality_values ();
- 
+
   ### OPENING OUTPUT FILEHANDLES
   if ($paired_end){
     open (FASTQ_R1,'>',"${output_dir}simulated_1.fastq") or die $!;
@@ -187,9 +190,9 @@ sub run_sequence_generation{
 		### It doesn't make sense to introduce non-directionality into random sequences, so skipping this part
 
 		### BISULFITE CONVERSION
-		if (defined $CG_conversion_rate and defined $CH_conversion_rate){
+		if (defined $CG_conversion_rate and defined $CHG_conversion_rate and defined $CHH_conversion_rate){
 	$seq_1 = bisulfite_transform_sequences_context_specifically($seq_1);
-	if ($paired_end){	
+	if ($paired_end){
 	  $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2);
 	}
       }
@@ -198,7 +201,7 @@ sub run_sequence_generation{
 	if ($paired_end){
 	  $seq_2 = bisulfite_transform_sequences_uniformly($seq_2) unless ($conversion_rate == 0);
 	}
-	
+
 	if ($conversion_rate == 0){
 	  $seq_1 = substr ($seq_1,0,length ($seq_1) - 1 ); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
 	  if ($paired_end){
@@ -213,7 +216,7 @@ sub run_sequence_generation{
 		### we need to take slightly different routes for single-end and paired-end sequences
 		### PAIRED-END
 		if ($paired_end){
-		    
+
 		($seq_1,$seq_2,$strand,$genomic_coords) = generate_genomic_sequences_paired_end($conversion_rate);
 		if ($strand eq 'plus'){
 			$plus_strand_total++;
@@ -228,9 +231,9 @@ sub run_sequence_generation{
 			$seq_1 = introduce_SNPs($seq_1);
 			$seq_2 = introduce_SNPs($seq_2);
 		}
-		
+
 		### BISULFITE CONVERSION
-		if (defined $CG_conversion_rate and defined $CH_conversion_rate){
+		if (defined $CG_conversion_rate and defined $CHH_conversion_rate and defined $CHG_conversion_rate){
 			$seq_1 = bisulfite_transform_sequences_context_specifically($seq_1);
 			$seq_2 = bisulfite_transform_sequences_context_specifically($seq_2);
 		}
@@ -247,7 +250,7 @@ sub run_sequence_generation{
 	### NON-DIRECTIONAL LIBRARIES
 	if ($non_directional){
 	  my $complemented = make_non_directional_sequences();
-	
+
 	  ### We are swapping read 1 and read 2 if we want to get non-directioal reads
 	  if ($complemented == 1){
 	    $seq_2 = reverse_complement($seq_2);# reverse complementing the paired-end side
@@ -258,7 +261,7 @@ sub run_sequence_generation{
 	  else{
 	    $seq_2 = reverse_complement($seq_2); # reverse complementing the paired-end side
 	  }
-	}	
+	}
 	else{
 	  $seq_2 = reverse_complement($seq_2); # reverse complementing the paired-end side
 	}
@@ -281,7 +284,7 @@ sub run_sequence_generation{
 	  $seq_1 = introduce_SNPs($seq_1);
 	}
 	### BISULFITE CONVERSION
-	if (defined $CG_conversion_rate and defined $CH_conversion_rate){
+	if (defined $CG_conversion_rate and defined $CHG_conversion_rate and defined $CHH_conversion_rate){
 	  $seq_1 = bisulfite_transform_sequences_context_specifically ($seq_1);
 	}
 	else{
@@ -398,11 +401,13 @@ sub run_sequence_generation{
     warn "Sequences reverse complemented (non-directional library): $counting{'non_directional'} ($percentage_non_directional%)\n\n";
   }
 
-  if (defined $CG_conversion_rate and defined $CH_conversion_rate){
+  if (defined $CG_conversion_rate and defined $CHG_conversion_rate and defined $CHH_conversion_rate){
     my $percentage_CG_conversion_rate = sprintf ("%.2f",$counting{'CG_converted'}*100/$counting{'CG_total'});
     warn "Cytosines converted in CG-context: $percentage_CG_conversion_rate%\n";
-    my $percentage_CH_conversion_rate = sprintf ("%.2f",$counting{'CH_converted'}*100/$counting{'CH_total'});
-    warn "Cytosines converted in CH-context: $percentage_CH_conversion_rate%\n";
+		my $percentage_CHG_conversion_rate = sprintf ("%.2f",$counting{'CHG_converted'}*100/$counting{'CHG_total'});
+    warn "Cytosines converted in CH-context: $percentage_CHG_conversion_rate%\n";
+    my $percentage_CHH_conversion_rate = sprintf ("%.2f",$counting{'CHH_converted'}*100/$counting{'CHH_total'});
+    warn "Cytosines converted in CH-context: $percentage_CHH_conversion_rate%\n";
   }
   else{
     if ($conversion_rate == 0){
@@ -676,7 +681,7 @@ sub bisulfite_transform_sequences_uniformly{
   my $converted_C_count = 0;
 
   my $seq = shift;
- 
+
   ### shortening the sequence again by 1bp
   $seq = substr($seq,0, (length($seq)-1));
 
@@ -689,7 +694,7 @@ sub bisulfite_transform_sequences_uniformly{
       ++$total_C_count;
       ### converting each C with an individual conversion rate (set globally)
       my $random = int(rand(10000)+1)/100;
-	
+
       if ($random <= $conversion_rate){
 	++$converted_C_count;
 	$base = 'T';
@@ -712,8 +717,10 @@ sub bisulfite_transform_sequences_context_specifically{
 
   my $converted_CG_count = 0;
   my $total_CG_count = 0;
-  my $converted_CH_count = 0;
-  my $total_CH_count = 0;
+  my $converted_CHG_count = 0;
+  my $total_CHG_count = 0;
+	my $converted_CHH_count = 0;
+  my $total_CHH_count = 0;
 
   my @bases = split (//,$seq);
 
@@ -724,14 +731,14 @@ sub bisulfite_transform_sequences_context_specifically{
 
       ### converting each C with an individual conversion rate (set globally for each context)
       my $random = int(rand(10000)+1)/100;
-	
-      ### if the C is at the last position we can't determine the sequence context (without going back to the genomic sequence) and will assume a non-CpG context for simplicity
-      if ( ($index+1) >= scalar@bases){
 
-	$total_CH_count++;
+      ### if the C is at the last or second to last position we can't determine the sequence context (without going back to the genomic sequence) and will assume a CHH context for simplicity
+      if ( ($index+2) >= scalar@bases){
 
-	if ($random <= $CH_conversion_rate){
-	  $converted_CH_count++;
+	$total_CHH_count++;
+
+	if ($random <= $CHH_conversion_rate){
+	  $converted_CHH_count++;
 	  $bases[$index] = 'T';
 	}
       }
@@ -745,12 +752,19 @@ sub bisulfite_transform_sequences_context_specifically{
 	    $converted_CG_count++;
 	  }
 	}
+	elsif ( $bases[$index+2] eq 'G'){
+		### CHG context
+	  $total_CHG_count++;
+	  if ($random <= $CHG_conversion_rate){
+	    $bases[$index] = 'T';
+	    $converted_CHG_count++;
+	}
 	else {
 	  ### non-CpG context
-	  $total_CH_count++;
-	  if ($random <= $CH_conversion_rate){
+	  $total_CHH_count++;
+	  if ($random <= $CHH_conversion_rate){
 	    $bases[$index] = 'T';
-	    $converted_CH_count++;
+	    $converted_CHH_count++;
 	  }
 	}
       }
@@ -759,8 +773,10 @@ sub bisulfite_transform_sequences_context_specifically{
 
   $counting{'CG_converted'} += $converted_CG_count;
   $counting{'CG_total'} += $total_CG_count;
-  $counting{'CH_converted'} += $converted_CH_count;
-  $counting{'CH_total'} += $total_CH_count;
+  $counting{'CHG_converted'} += $converted_CHG_count;
+  $counting{'CHG_total'} += $total_CHG_count;
+	$counting{'CHH_converted'} += $converted_CHH_count;
+	$counting{'CHH_total'} += $total_CHH_count;
 
   my $bisulfite_converted_seq = join ("",@bases);
 
@@ -996,17 +1012,17 @@ sub generate_quality_values{
   ### NO ERROR RATE SPECIFIED
   if ($error_rate == 0){
       warn "Quality values will be constant throughout with a Phred score of $quality\n";
-      
+
       my @quals;
       ### if no error rate was specified we will use a constant quality score for all bases ($quality), which was either determined by the user or which is 40 by default
       foreach (1..($sequence_length - 1)){ # sequence length has been incremented by 1
 	  push @quals,$quality;
       }
-      
+
       foreach my $qual(@quals){
 	  $qual = convert_phred_score_into_quality_string($qual);
       }
-      
+
       my $no_error_quality = join ("",@quals);
       return $no_error_quality;
   }
@@ -1033,7 +1049,7 @@ sub generate_quality_values{
 	$decayed_quality = 2;
       }
       push @quals,$decayed_quality;
-    }	
+    }
 
     ### converting the Phred Scale values into ASCII strings (currently Phred33 format)
     ### This will be performed for all error rate models
@@ -1173,7 +1189,7 @@ sub generate_genomic_sequences {
   my $plus = 0;
   my $minus = 0;
   my $valid =0;
-  
+
   until ($valid == 1){
     my $random = int(rand($total_genome_length)+1);
     my $chromosome_length = 0;
@@ -1181,28 +1197,28 @@ sub generate_genomic_sequences {
     # finding out which chromosome has been hit
     foreach my $chr (sort keys %chromosomes){
 	$chromosome_length += length ($chromosomes{$chr});
-	
+
 	if ( ($random+length($sequence_length)) < $chromosome_length){
 	    last unless (length $chromosomes{$chr} > $chromosome_length-$random+$sequence_length);
 	    $sequence = substr ($chromosomes{$chr},$chromosome_length-$random,$sequence_length);
-	    
+
 	    # if the sequence contains any N's we are generating another random number without any Ns
 	    last if ($sequence =~ /n/i);
 	    last if (length($sequence) != $sequence_length);
-	    
+
 	    # otherwise we randomly choose either a forward or reverse sequence and then return it
 	    my $strand = int(rand(2)); # will produce either 0 or 1 with a 50:50 chance
-	    
+
 	    if ($strand == 0){
 		$sequence = reverse_complement($sequence);
 		++$minus;
-	    }	
+	    }
 	    else{
 		++$plus;
 	    }
-	    
+
 	    ++$valid;
-	    
+
 	    if ($plus == 1){
 		$coords = "${chr}:".($chromosome_length-$random + 1).'-'.($chromosome_length - $random + $sequence_length - 1);  # shorten sequence by 1 on 3' end
 	}
@@ -1223,9 +1239,9 @@ sub generate_genomic_sequences {
 
 sub generate_genomic_sequences_paired_end {
     my $conversion_rate = shift;
-    
+
     my $fragment_length = int(rand($maxfrag-$minfrag)+$minfrag);
-    
+
     my $seq_1;
     my $seq_2;
     my $coords;
@@ -1233,20 +1249,20 @@ sub generate_genomic_sequences_paired_end {
     my $minus = 0;
     my $valid = 0;
 	# warn "fragment_length: $fragment_length\n";
-    
+
     until ($valid){
 		my $random = int(rand($total_genome_length)+1);
 		# warn "\n\nNEW FRAGMENT:\nrandom: $random\n";
 		# warn "fragment_length: $fragment_length\n";
-    
+
 		my $chromosome_length = 0;
-		
+
 		foreach my $chr (sort keys %chromosomes){
 			$chromosome_length += length ($chromosomes{$chr});
 			# warn "total chr length: $chromosome_length\n";
-			
+
 			if ( ($random+$fragment_length) < $chromosome_length){
-			
+
 				last unless ($chromosome_length - $fragment_length > $random );
 
 				my $offset = $random - ($chromosome_length - length ($chromosomes{$chr}) );
@@ -1265,17 +1281,17 @@ sub generate_genomic_sequences_paired_end {
 					# warn "The length of seq1 or seq2 were not equal to the sequence length of $sequence_length\n";
 					last;
 				}
-			
+
 				# otherwise we randomly choose either a forward or reverse strand for sequence 1 and return it
 				my $strand = int(rand(2)); # will produce either 0 or 1 with a 50:50 chance
-				
+
 				if ($strand == 0){
 					my $temp = reverse_complement($seq_1);
 					$seq_1 = reverse_complement($seq_2);
 					$seq_2 = $temp;
 					++$minus;
-					$coords = "${chr}:".($offset + 2).'-'.($offset + $fragment_length);       
-				      
+					$coords = "${chr}:".($offset + 2).'-'.($offset + $fragment_length);
+
 				}
 				else{
 					++$plus; # plus strand alignments are fine like this
@@ -1295,10 +1311,10 @@ sub generate_genomic_sequences_paired_end {
     }
     if($plus == 1){
 	# warn "Returning coords: $coords, strand: +\n";
-	return ($seq_1,$seq_2,'plus',$coords); 
+	return ($seq_1,$seq_2,'plus',$coords);
     }
     else{
-	# warn "Returning coords: $coords, strand: -\n";     
+	# warn "Returning coords: $coords, strand: -\n";
 	return ($seq_1,$seq_2,'minus',$coords);
     }
 }
@@ -1347,7 +1363,7 @@ sub read_genome_into_memory{
 
     ### Extracting chromosome name from the FastA header
     my $chromosome_name = extract_chromosome_name($first_line);
-	
+
     my $sequence;
     while (<CHR_IN>){
       chomp;
@@ -1436,7 +1452,7 @@ sub convert_basespace_to_colorspace{
       if ($second_base eq 'A'){
 	push @cspace, 0;
       }
-      if ($second_base eq 'C'){	
+      if ($second_base eq 'C'){
 	push @cspace, 1;
       }
       if ($second_base eq 'G'){
@@ -1451,7 +1467,7 @@ sub convert_basespace_to_colorspace{
       if ($second_base eq 'A'){
 	push @cspace, 1;
       }
-      if ($second_base eq 'C'){	
+      if ($second_base eq 'C'){
 	push @cspace, 0;
       }
       if ($second_base eq 'G'){
@@ -1466,7 +1482,7 @@ sub convert_basespace_to_colorspace{
       if ($second_base eq 'A'){
 	push @cspace, 2;
       }
-      if ($second_base eq 'C'){	
+      if ($second_base eq 'C'){
 	push @cspace, 3;
       }
       if ($second_base eq 'G'){
@@ -1481,7 +1497,7 @@ sub convert_basespace_to_colorspace{
       if ($second_base eq 'A'){
 	push @cspace, 3;
       }
-      if ($second_base eq 'C'){	
+      if ($second_base eq 'C'){
 	push @cspace, 2;
       }
       if ($second_base eq 'G'){
@@ -1517,7 +1533,8 @@ sub process_command_line{
 	my $colorspace;
 	my $non_directional;
 	my $CG_conversion_rate;
-	my $CH_conversion_rate;
+	my $CHG_conversion_rate;
+	my $CHH_conversion_rate;
 	my $paired_end;
 	my $minfrag;
 	my $maxfrag;
@@ -1540,7 +1557,8 @@ sub process_command_line{
 				'genome_folder=s'            => \$genome_folder,
 				'non_directional'            => \$non_directional,
 				'CG|CG_conversion=f'         => \$CG_conversion_rate,
-				'CH|CH_conversion=f'         => \$CH_conversion_rate,
+				'CHG|CHG_conversion=f'       => \$CHG_conversion_rate,
+				'CHH|CHH_conversion=f'       => \$CHH_conversion_rate,
 				'pe|paired_end'              => \$paired_end,
 				'I|minfrag=i'                => \$minfrag,
 				'X|maxfrag=i'                => \$maxfrag,
@@ -1612,7 +1630,7 @@ VERSION
 			chdir $output_dir or die "Failed to move to $output_dir\n";
 			$output_dir = getcwd; #  making the path absolute
 		}
-		
+
 		unless ($output_dir =~ /\/$/){
 			$output_dir =~ s/$/\//;
 		}
@@ -1622,13 +1640,13 @@ VERSION
 		$output_dir = '';
 	}
 
-  
-  
+
+
   ### BISULFITE CONVERSION RATES
 
-  if (defined $CG_conversion_rate or defined $CH_conversion_rate){
+  if (defined $CG_conversion_rate or defined $CHG_conversion_rate or defined $CHH_conversion_rate){
     ## conversion rates need to be set for each context individually
-    unless (defined $CG_conversion_rate and defined $CH_conversion_rate){
+    unless (defined $CG_conversion_rate and defined $CHG_conversion_rate and defined $CHH_conversion_rate){
       die "Please specify conversion rates for both CG- and non-CG context\n\n";
     }
     if (defined $conversion_rate){
@@ -1639,7 +1657,10 @@ VERSION
     unless ($CG_conversion_rate >= 0 and $CG_conversion_rate <= 100){
       die "Please specify a CG-conversion rate between 0 and 100\n";
     }
-    unless ($CH_conversion_rate >= 0 and $CH_conversion_rate <= 100){
+    unless ($CHG_conversion_rate >= 0 and $CHG_conversion_rate <= 100){
+      die "Please specify a CH-conversion rate between 0 and 100\n";
+    }
+		unless ($CHH_conversion_rate >= 0 and $CHH_conversion_rate <= 100){
       die "Please specify a CH-conversion rate between 0 and 100\n";
     }
     ## setting the uniform conversionr ate to undef
@@ -1652,14 +1673,16 @@ VERSION
       die "Please specify a BS conversion rate value between 0 and 100\n";
     }
 
-    $CH_conversion_rate = undef;
+    $CHH_conversion_rate = undef;
+		$CHG_conversion_rate = undef;
     $CG_conversion_rate = undef;
   }
   else{
     ## otherwise we assume a 100 % conversion rate
     $conversion_rate = "100";
 
-    $CH_conversion_rate = undef;
+		$CHG_conversion_rate = undef;
+    $CHH_conversion_rate = undef;
     $CG_conversion_rate = undef;
   }
 
@@ -1802,7 +1825,7 @@ VERSION
     $maxfrag = 0;
   }
 
-  return ($length,$conversion_rate,$number_of_seqs,$error_rate,$snps,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir);
+  return ($length,$conversion_rate,$number_of_seqs,$error_rate,$snps,$quality,$fixed_length_adapter,$variable_length_adapter,$adapter_dimer,$random,$colorspace,$genome_folder,$non_directional,$CG_conversion_rate,$CHG_conversion_rate,$CHH_conversion_rate,$paired_end,$minfrag,$maxfrag,$output_dir);
 }
 
 sub print_helpfile{
@@ -1822,7 +1845,7 @@ BASIC ATTRIBUTES:
 
 -o/--output_dir <dir>    		  Write all output files into this directory. By default the output files will be written into
                                   the current directory. If the specified folder does not exist, Sherman will attempt to
-								  create it first. The path to the output folder can be either relative or absolute.								  
+								  create it first. The path to the output folder can be either relative or absolute.
 
 --random                          The sequences will be generated with entirely random base composition
                                   instead extracting sequences from a real genome. This is a much
@@ -1846,13 +1869,18 @@ BASIC ATTRIBUTES:
 
 -CG/--CG_conversion <float>       Bisulfite conversion rate for cytosines in CG-context as <float> %. This value
                                   can be anything between 0 (no bisulfite conversion at all) and 100% (all
-                                  CG-cytosines will be converted into thymines). Requires -CH/--CH_conversion
-                                  to be specified as well.
+                                  CG-cytosines will be converted into thymines). Requires -CHG/--CHG_conversion
+                                  and -CHH/--CHH_conversionto be specified as well.
 
--CH/--CH_conversion <float>       Bisulfite conversion rate for cytosines in CH-context as <float> %. This value
+-CHG/--CHG_conversion <float>     Bisulfite conversion rate for cytosines in CHG-context as <float> %. This value
                                   can be anything between 0 (no bisulfite conversion at all) and 100% (all
                                   CH-cytosines will be converted into thymines). Requires -CG/--CG_conversion
-                                  to be specified as well.
+                                  and -CHH/--CHH_conversionto be specified as well.
+
+-CHH/--CHH_conversion <float>     Bisulfite conversion rate for cytosines in CHH-context as <float> %. This value
+                                  can be anything between 0 (no bisulfite conversion at all) and 100% (all
+                                  CHH-cytosines will be converted into thymines). Requires -CG/--CG_conversion
+                                  and -CHG/--CHG_conversionto be specified as well.
 
 --colorspace                     Using this option will print out all sequences in color space as well
                                   as in base space FastQ format. Note that the conversion of base space to
@@ -1885,7 +1913,7 @@ CONTAMINANTS:
 --fixed_length_adapter <int>      Replaces the most 3' <int> bp of each read with Illumina adapter
                                   sequence. Sherman is currently using the Illumina Paired End PCR Primer 2
                                   as adapter sequence, however this can be modified in the script if necessary
-                                  (locate the following line to change it: 
+                                  (locate the following line to change it:
                                   my $adapter_sequence = 'CAAGCAGAAGACGGCATACGAGATCGGTCTCGGCATTCCTGCTGAACCGCTCTTCCGATCT').
 
 --variable_length_adapter <int>   For this contamination we simulate a normal distribution of fragment
@@ -1896,7 +1924,7 @@ CONTAMINANTS:
                                   (mu) and a variance (sigma) of 60 (this is a fixed value which was
                                   determined empirically).
 
-Last update: 18 January 2019.
+Last update: 15 October 2019.
 
 
 HELP
