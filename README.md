@@ -7,7 +7,7 @@ Sherman can simulate ungapped high-throughput datasets for bisulfite sequencing 
 - Generate any number of sequences
 - Generate either completely random sequences or use genomic sequences (genome can be specified)
 - Generates single-end or paired-end data
-- Adjustable bisulfite conversion rate from 0-100% for either all cytosines or cytosines in CH and CG context individually
+- Adjustable bisulfite conversion rate from 0-100% for either all cytosines or cytosines in CG, CHG, and CHH contexts individually
 - Generate directional or non-directional libraries
 - Generate sequences in base-space or SOLiD color-space format
 - Adjustable default Phred quality score (Sanger encoding, Phred+33 format)
