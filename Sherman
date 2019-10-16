@@ -61,8 +61,9 @@ sub print_onscreen_summary{
   }
   warn "sequence length:\t$sequence_length bp\n";
 
-  ### making the sequences 1bp longer than it needs to be so we can extract the sequence context again
+  ### making the sequences 2bp longer than it needs to be so we can extract the sequence context again
   ++$sequence_length;
+	++$sequence_length;
 
   warn "number of sequences being generated:\t$number_of_sequences\n";
   if ($non_directional){
@@ -178,38 +179,38 @@ sub run_sequence_generation{
 
     ### SEQUENCE GENERATION: RANDOM
     if ($random){
-		$seq_1 = generate_random_sequences();
+			$seq_1 = generate_random_sequences();
+			if ($paired_end){
+				$seq_2 = generate_random_sequences();
+			}
+
+			### INTRODUCING SNPS
+			### It doesn't make sense to introduce SNPs into random sequences, so skipping this part
+
+			### NON-DIRECTIONAL LIBRARIES
+			### It doesn't make sense to introduce non-directionality into random sequences, so skipping this part
+
+			### BISULFITE CONVERSION
+			if (defined $CG_conversion_rate and defined $CHG_conversion_rate and defined $CHH_conversion_rate){
+		$seq_1 = bisulfite_transform_sequences_context_specifically($seq_1);
 		if ($paired_end){
-			$seq_2 = generate_random_sequences();
+		  $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2);
+		}
+	      }
+	      else{
+		$seq_1 = bisulfite_transform_sequences_uniformly($seq_1) unless ($conversion_rate == 0);
+		if ($paired_end){
+		  $seq_2 = bisulfite_transform_sequences_uniformly($seq_2) unless ($conversion_rate == 0);
 		}
 
-		### INTRODUCING SNPS
-		### It doesn't make sense to introduce SNPs into random sequences, so skipping this part
-
-		### NON-DIRECTIONAL LIBRARIES
-		### It doesn't make sense to introduce non-directionality into random sequences, so skipping this part
-
-		### BISULFITE CONVERSION
-		if (defined $CG_conversion_rate and defined $CHG_conversion_rate and defined $CHH_conversion_rate){
-	$seq_1 = bisulfite_transform_sequences_context_specifically($seq_1);
-	if ($paired_end){
-	  $seq_2 = bisulfite_transform_sequences_context_specifically($seq_2);
-	}
-      }
-      else{
-	$seq_1 = bisulfite_transform_sequences_uniformly($seq_1) unless ($conversion_rate == 0);
-	if ($paired_end){
-	  $seq_2 = bisulfite_transform_sequences_uniformly($seq_2) unless ($conversion_rate == 0);
-	}
-
-	if ($conversion_rate == 0){
-	  $seq_1 = substr ($seq_1,0,length ($seq_1) - 1 ); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
-	  if ($paired_end){
-	    $seq_2 = substr ($seq_2,0,length ($seq_2) - 1 ); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
-	  }
-	}
-      }
-    }
+		if ($conversion_rate == 0){
+		  $seq_1 = substr ($seq_1,0,length ($seq_1) - 2 ); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+		  if ($paired_end){
+		    $seq_2 = substr ($seq_2,0,length ($seq_2) - 2 ); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+		  }
+		}
+	      }
+	    }
     else{ # SEQUENCE GENRATION: GENOMIC SEQUENCES (default)
 
 		my $strand;
@@ -239,8 +240,8 @@ sub run_sequence_generation{
 		}
 		else{
 		if  ($conversion_rate == 0){
-			$seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
-			$seq_2 = substr($seq_2,0,length($seq_2)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+			$seq_1 = substr($seq_1,0,length($seq_1)-2); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+			$seq_2 = substr($seq_2,0,length($seq_2)-2); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
 		}
 		else{
 			$seq_1 = bisulfite_transform_sequences_uniformly($seq_1);
@@ -289,7 +290,7 @@ sub run_sequence_generation{
 	}
 	else{
 	  if  ($conversion_rate == 0){
-	    $seq_1 = substr($seq_1,0,length($seq_1)-1); ### need to shorten the sequence by 1 bp again which is otherwise done in the conversion section
+	    $seq_1 = substr($seq_1,0,length($seq_1)-2); ### need to shorten the sequence by 2 bp again which is otherwise done in the conversion section
 	  }
 	  else{
 	    $seq_1 = bisulfite_transform_sequences_uniformly($seq_1);
@@ -482,7 +483,7 @@ sub introduce_variable_length_adapter_contamination{
 
   # now taking a random fragment length from @gaussian
   my $fragment = shift @gaussian;
-  my $seq_length = $sequence_length - 1; # the sequence has already been shortened by 1 bp again.
+  my $seq_length = $sequence_length - 2; # the sequence has already been shortened by 1 bp again.
 
   die "Exiting for fragment $fragment\n"  unless (defined $fragment);
 
@@ -682,8 +683,8 @@ sub bisulfite_transform_sequences_uniformly{
 
   my $seq = shift;
 
-  ### shortening the sequence again by 1bp
-  $seq = substr($seq,0, (length($seq)-1));
+  ### shortening the sequence again by 2bp
+  $seq = substr($seq,0, (length($seq)-2));
 
   my @bases = split (//,$seq);
 
@@ -781,7 +782,7 @@ sub bisulfite_transform_sequences_context_specifically{
   my $bisulfite_converted_seq = join ("",@bases);
 
   ### shortening the sequence again by 1bp
-  $bisulfite_converted_seq = substr($bisulfite_converted_seq,0, (length($bisulfite_converted_seq)-1));
+  $bisulfite_converted_seq = substr($bisulfite_converted_seq,0, (length($bisulfite_converted_seq)-2));
 
   return $bisulfite_converted_seq;
 }
@@ -828,7 +829,7 @@ sub introduce_SNPs{
   my $SNP_position_count = 0;
 
   while ($SNP_position_count < $number_of_SNPs){
-    my $random= int(rand(length($seq))); # this will be a number between 0 and the read length-1, which we can use directly as index positions
+    my $random= int(rand(length($seq-1))); # this will be a number between 0 and the read length-2, which we can use directly as index positions
     unless (exists $snps{$random}){
       $snps{$random} = 1;
       ++$SNP_position_count;
@@ -1015,7 +1016,7 @@ sub generate_quality_values{
 
       my @quals;
       ### if no error rate was specified we will use a constant quality score for all bases ($quality), which was either determined by the user or which is 40 by default
-      foreach (1..($sequence_length - 1)){ # sequence length has been incremented by 1
+      foreach (1..($sequence_length - 2)){ # sequence length has been incremented by 1
 	  push @quals,$quality;
       }
 
@@ -1039,7 +1040,7 @@ sub generate_quality_values{
 
     my @quals;
 
-    for my $x (1..($sequence_length - 1)){ # sequence length has been incremented by 1
+    for my $x (1..($sequence_length - 2)){ # sequence length has been incremented by 1
       my $term1 = 0.034286*$x;
       my $term2 = 0.0009263*($x**2);
       my $term3 = $var*0.00001*($x**3);
@@ -1188,7 +1189,7 @@ sub generate_genomic_sequences {
   my $coords;
   my $plus = 0;
   my $minus = 0;
-  my $valid =0;
+  my $valid = 0;
 
   until ($valid == 1){
     my $random = int(rand($total_genome_length)+1);
@@ -1220,10 +1221,10 @@ sub generate_genomic_sequences {
 	    ++$valid;
 
 	    if ($plus == 1){
-		$coords = "${chr}:".($chromosome_length-$random + 1).'-'.($chromosome_length - $random + $sequence_length - 1);  # shorten sequence by 1 on 3' end
+		$coords = "${chr}:".($chromosome_length-$random + 1).'-'.($chromosome_length - $random + $sequence_length - 2);  # shorten sequence by 1 on 3' end
 	}
 	else{
-	  $coords = "${chr}:".($chromosome_length-$random + 1 + 1).'-'.($chromosome_length - $random + $sequence_length);  # shorten sequence by 1 on 5' end
+	  $coords = "${chr}:".($chromosome_length-$random + 1 + 1 + 1).'-'.($chromosome_length - $random + $sequence_length);  # shorten sequence by 1 on 5' end
 	}
 	last; # exiting once we found a valid sequence
       }
@@ -1295,7 +1296,7 @@ sub generate_genomic_sequences_paired_end {
 				}
 				else{
 					++$plus; # plus strand alignments are fine like this
-					$coords = "${chr}:".($offset + 1).'-'.($offset + $fragment_length - 1);
+					$coords = "${chr}:".($offset + 1).'-'.($offset + $fragment_length - 2);
 				}
 
 				# $coords = "${chr}:".($chromosome_length-$random+1).'-'.($chromosome_length-$random+$fragment_length);
